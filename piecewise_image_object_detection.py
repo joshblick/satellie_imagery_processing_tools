@@ -1,3 +1,4 @@
+import numpy as np
 import cv2
 
 class snippet:
@@ -16,28 +17,26 @@ class snippet:
     """
     def __init__(self, snippet_size, x_min, y_min, image_as_nparray, image_xmax,
                 image_ymax, parent_image_name, is_offset):
-                """
-                
-                """
+        """
+        """
         self.x_min = x_min
         self.y_min = y_min
         self.size = snippet_size
         self.parent_image_name = parent_image_name
         self.is_offset = is_offset
         
-        
-        self.x_max, self.y_max, self.padding_x, self.padding_y = get_appropriate_bounds(x_min = x_min, 
-                                                                                        y_min = y_min, 
-                                                                                        snippet_size = snippet_size, 
-                                                                                        image_xmax = image_xmax, 
-                                                                                        image_ymax = image_ymax
-                                                                                        )
+        self.x_max, self.y_max, self.padding_x, self.padding_y = self.get_appropriate_bounds(x_min = x_min, 
+                                                                                            y_min = y_min, 
+                                                                                            snippet_size = snippet_size, 
+                                                                                            image_xmax = image_xmax, 
+                                                                                            image_ymax = image_ymax
+                                                                                            )
         
         self.name = "" #TODO: come up with some sort of naming convention like [y_min]_[x_min]_[y_max]_[x_max]
-        if (padding_x==0) & (padding_y==0):
-            self.image_as_nparray = image_as_nparray[y_min: y_max, x_min: x_max])
+        if (self.padding_x==0) & (self.padding_y==0):
+            self.image_as_nparray = image_as_nparray[self.y_min: self.y_max, self.x_min: self.x_max]
         else:
-            self.image_as_nparray = cv2.copyMakeBorder(image_as_nparray[y_min: y_max, x_min: x_max], 
+            self.image_as_nparray = cv2.copyMakeBorder(image_as_nparray[self.y_min: self.y_max, self.x_min: self.x_max], 
                                                         0, 
                                                         self.padding_y, 
                                                         0, 
@@ -45,7 +44,7 @@ class snippet:
                                                         cv2.BORDER_CONSTANT
                                                         )
         
-    def self.get_appropriate_bounds(x_min, y_min, snippet_size, image_xmax, image_ymax):
+    def get_appropriate_bounds(self, x_min, y_min, snippet_size, image_xmax, image_ymax):
         """
         need to identify the bounds of the wider image to pull and then padd 
         them with black as necessary to make all images the correct size
@@ -104,7 +103,7 @@ class image:
         self.snippets = []
         self.detections = []
     
-    def cut_image(self, output_size, xy_inialisation, x_max, y_max):
+    def cut_image(self, output_size, xy_inialisation, x_max, y_max, is_offset):
         """
         """
         rows = 0
@@ -126,23 +125,42 @@ class image:
             
             while (x_max-x)>=output_size:
                 images += 1
+                self.snippets.append(snippet(snippet_size = output_size, 
+                                            x_min = x, 
+                                            y_min = y, 
+                                            image_as_nparray = self.image_as_nparray, 
+                                            image_xmax = self.x_max,
+                                            image_ymax = self.y_max, 
+                                            parent_image_name = self.image_name,  
+                                            is_offset = is_offset
+                                            )
+                                    )
                 #add the cut piece of the image to the list
-                self.snippets.append(self.image_as_nparray[y:y+output_size, x:x+output_size])
+                #self.snippets.append(self.image_as_nparray[y:y+output_size, x:x+output_size])
                 x += output_size
             else:
                 images += 1
-                
+                self.snippets.append(snippet(snippet_size = output_size, 
+                                            x_min = x, 
+                                            y_min = y, 
+                                            image_as_nparray = self.image_as_nparray, 
+                                            image_xmax = self.x_max,
+                                            image_ymax = self.y_max, 
+                                            parent_image_name = self.image_name,  
+                                            is_offset = is_offset
+                                            )
+                                    )
                 ##### Start of init function in snippet object ####
                 
                 #cut the crop image
-                crop_img=self.image_as_nparray[y:y+output_size, x:x_max]
+                #crop_img=self.image_as_nparray[y:y+output_size, x:x_max]
                 #create the border around the remaining part
-                bordered_im = cv2.copyMakeBorder(crop_img, 0, output_size-crop_img.shape[0],\
-                                             0 ,output_size-crop_img.shape[1], cv2.BORDER_CONSTANT)
+                #bordered_im = cv2.copyMakeBorder(crop_img, 0, output_size-crop_img.shape[0],\
+                #                             0 ,output_size-crop_img.shape[1], cv2.BORDER_CONSTANT)
                 
                 #### End of init function in snippet object ####
                 
-                self.snippets.append(bordered_im)
+                #self.snippets.append(bordered_im)
                 x += output_size
             y += output_size
         else:
@@ -154,33 +172,48 @@ class image:
             
             while (x_max-x)>=output_size:
                 images += 1
-                
-                ##### Start of init function in snippet object ####
-                
-                #cut the crop image
-                crop_img=self.image_as_nparray[y:y_max, x:x+output_size]
-                #create the border around the remaining part
-                bordered_im = cv2.copyMakeBorder(crop_img, 0, output_size-crop_img.shape[0],\
-                                                 0,output_size-crop_img.shape[1], cv2.BORDER_CONSTANT)
-                
-                #### End of init function in snippet object ####
-                
-                self.snippets.append(bordered_im)
+                self.snippets.append(snippet(snippet_size = output_size, 
+                                            x_min = x, 
+                                            y_min = y, 
+                                            image_as_nparray = self.image_as_nparray, 
+                                            image_xmax = self.x_max,
+                                            image_ymax = self.y_max, 
+                                            parent_image_name = self.image_name,  
+                                            is_offset = is_offset
+                                            )
+                                    )
                 x += output_size
+                ##### Start of init function in snippet object ####
+                #cut the crop image
+                #crop_img=self.image_as_nparray[y:y_max, x:x+output_size]
+                #create the border around the remaining part
+                #bordered_im = cv2.copyMakeBorder(crop_img, 0, output_size-crop_img.shape[0],\
+                #                                 0,output_size-crop_img.shape[1], cv2.BORDER_CONSTANT)
+                #self.snippets.append(bordered_im)
+                #### End of init function in snippet object ####
             else:
                 images += 1
-                
+                self.snippets.append(snippet(snippet_size = output_size, 
+                                            x_min = x, 
+                                            y_min = y, 
+                                            image_as_nparray = self.image_as_nparray, 
+                                            image_xmax = self.x_max,
+                                            image_ymax = self.y_max, 
+                                            parent_image_name = self.image_name,  
+                                            is_offset = is_offset
+                                            )
+                                    )
                 ##### Start of init function in snippet object ####
                 
                 #cut the crop image
-                crop_img=self.image_as_nparray[y:y_max, x:x_max]
+                #crop_img=self.image_as_nparray[y:y_max, x:x_max]
                 #create the border around the remaining part
-                bordered_im = cv2.copyMakeBorder(crop_img, 0, output_size-crop_img.shape[0],\
-                                                 0,output_size-crop_img.shape[1], cv2.BORDER_CONSTANT)
+                #bordered_im = cv2.copyMakeBorder(crop_img, 0, output_size-crop_img.shape[0],\
+                #                                 0,output_size-crop_img.shape[1], cv2.BORDER_CONSTANT)
                 
                 #### End of init function in snippet object ####
                 
-                self.snippets.append(bordered_im)
+                #self.snippets.append(bordered_im)
                 x += output_size
             y += output_size
         return int(rows), int(images/rows)
@@ -201,13 +234,15 @@ class image:
         self.rows, self.columns = self.cut_image(output_size, 
                                                  0, 
                                                  self.x_max, 
-                                                 self.y_max
+                                                 self.y_max,
+                                                 is_offset = False
                                                 ) #for the regular
         if with_offsets:#for the offsets
             self.offset_rows, self.offset_columns = self.cut_image(output_size, 
                                                                     int(offset_adjustment), 
                                                                     int(self.x_max - offset_adjustment), 
-                                                                    int(self.y_max - offset_adjustment) #TODO: don't just be lazy and cast, work out why they're ints atm
+                                                                    int(self.y_max - offset_adjustment), #TODO: don't just be lazy and cast, work out why they're ints atm
+                                                                    is_offset = True
                                                                     )
     def plot_image_snippets(self, fig_size):
         """
@@ -230,4 +265,6 @@ class image:
                 axes[i,j].axis('off')
                 image_no += 1
         plt.show()
-        
+
+
+print("Classes compile? correctly")
