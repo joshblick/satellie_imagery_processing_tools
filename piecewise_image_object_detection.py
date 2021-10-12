@@ -1,5 +1,127 @@
 import numpy as np
 import cv2
+import math
+import copy
+
+#TODO: capital letters for classes
+
+class detection:
+    """
+    """
+    def __init__(self, box_array, score, class_no, detection_number, parent_snippet):
+        #set box limits 
+        self.ymin_ratio, self.xmin_ratio, self.ymax_ratio, self.xmax_ratio = box_limits
+        
+        #set the score and the class number
+        self.score = score
+        self.class_no = class_no
+        # reverse score for sorting 
+        self.detection_score_sort = 1.0-score
+        # convert the local coordinates within the snippet (ratios) to clobal image coordinates
+        
+        self.y_min, self.x_min, self.y_max, self.x_max = self.find_global_coordinates(parent_snippet)
+        
+        # set the status of the detection to "active" as opposed to deleted when there is a matching item
+        
+        self.active = True
+        
+        #name is parent name plus the snippet_number
+        
+        #get the centroid of the bounidng box
+        self.centroidx = (self.x_max + self.x_min)/2.0
+        self.centroidy = (self.y_max + self.y_min)/2.0
+        
+        # get distance across the detection box
+        
+        self.quasi_radius = self.find_quasi_radius()
+        
+        # add the size of the box        
+        self.size = (self.y_max - self.y_min)(self.x_max - self.x_min)
+        
+        # set the id which references the objects position in the image list and which will be overwritten by the image method
+        self.id = None
+        
+        self.possible_overlaps = []
+        
+        self.overlaps = []
+        
+        
+        
+        
+    def identify_possible_overlaps(self, all_detections_in_image, num_quasi_radii):
+        """
+        Given a list of detection objects at the image level, this function identify those for which it is 
+        worthwhile to check the intersection
+        
+        The rule is basically that if they are worth being checked the sum of the quasi-radii of the two 
+        boxes will be less than the distance between them.
+        """
+        #TODO: come up with a more robust methodolgy than the differnce in x_mins vs radii shit
+        possible_overlaps = [detection for detection in all_detections_in_image if detection.name!=self.name]
+        
+        possible_overlaps = [detection for detection in all_detections_in_image if math.abs(detection.x_min-self.x_min)<=(self.quasi_radius+detection.quasi_radius)]
+        
+        self.possible_overlaps = [detection.id for detection in all_detections_in_image if math.abs(detection.y_min-self.y_min)<=(self.quasi_radius+detection.quasi_radius)]
+        
+    def identify_overlaps(self, all_detections_in_image, intersection_over_union_cutoff):
+        """
+        Given the list of ids (that is ids in the original image which represent the location in the image's detections attributie (list)
+        and the provided iou cutoff and preference for cars, we perform a 
+        
+        """
+        
+        for possible_overlap_id in self.possible_overlaps:
+            #compare intersection over union (IOU) with cutoff and add to 
+            other_detection = all_detections_in_image[possible_overlap_id]
+            iou = self.calculate_IOU(other_detection)
+            if iou>=intersection_over_union_cutoff:
+                self.overlaps.append(other_detection.id)
+                
+    
+    def find_quasi_radius(self):
+        a_squared = (self.y_max - self.y_min)**2
+        b_squared = (self.x_max - self.x_min)**2
+        
+        return math.sqrt(a_squared + b_squared)/2
+        
+    def find_global_coordinates(self, parent_snippet):
+        """Function which finds the location of an object in the 
+           scope of the original image, based on the relative coordinates
+           provided in the 
+        
+        """
+        snippet_size = parent_snippet.size
+        
+        x_offset = parent_snippet.x_min
+        y_offset = parent_snippet.y_min
+        
+        y_min = y_offset + (self.ymin_ratio*snippet_size)
+        y_max = y_offset + (self.ymax_ratio*snippet_size)
+        x_min = x_offset + (self.xmin_ratio*snippet_size)
+        x_max = x_offset + (self.xmax_ratio*snippet_size)
+        
+        return y_min, x_min, y_max, x_max
+    
+    def set_id(self, new_id):
+        """
+        Set an id corresponding to the location of the detection object in the 
+        list of detection objects at the image level
+        """
+        self.id = new_id
+    
+    def calculate_IOU(self, other):
+        """
+        Calculates the IOU
+        """
+        
+        intersection_y_max = min(self.y_max, other.y_max)
+        intersection_x_max = min(self.x_max, other.x_max)
+        intersection_y_min = max(self.y_min, other.y_min)
+        intersection_x_min = max(self.x_min, other.x_min)
+        
+        intersection_size = (intersection_y_max - intersection_y_min)(intersection_x_max - intersection_x_min)
+        
+        return intersection_size/(self.size + other.size - intersection_size)
 
 class snippet:
     """
@@ -10,7 +132,8 @@ class snippet:
      - x_min
      - x_max
      - parent_image_name
-     - detections
+     - <outdated>detections</outdated>
+
      
     Methods:
      - __init__(self, image_as_nparray, snippet_size, upper_limit, lower_limit, parent_image_name
@@ -32,7 +155,7 @@ class snippet:
                                                                                             image_ymax = image_ymax
                                                                                             )
         
-        self.name = "" #TODO: come up with some sort of naming convention like [y_min]_[x_min]_[y_max]_[x_max]
+        self.name = "{0{}_{1}_{2}_{3}".format(x_min, x_max, y_min, y_max) 
         if (self.padding_x==0) & (self.padding_y==0):
             self.image_as_nparray = image_as_nparray[self.y_min: self.y_max, self.x_min: self.x_max]
         else:
@@ -43,7 +166,45 @@ class snippet:
                                                         self.padding_x, 
                                                         cv2.BORDER_CONSTANT
                                                         )
+    
+    def return_detected_objects(self, detection_function, score_cutoff):
+        """
+        GENERATEOR
+        Detects the objects in the image snipet using the provided TF detection function
+        and then converts each one to a detection object (through the init method of the 
+        detection class). 
+        ## update: the detections are no longer added to the snippet, they are just passed to image
+        ####<Outdated>
+        ##Each object detected (above the given confidence level cutoff) 
+        #is added to the detections list attribute.
+        ####</Outdated>
         
+        In order to allow the comparison of detections across different snippets, in addition
+        to writing the detecion objects to a list attribute in the sniipet, it also acts as a
+        generator which yields each detectio object
+        
+        
+        """
+        
+        #TODO: take advantage of the batch processing tensor function instead of just doing this:
+        #reading just one image
+        test_tensor = tf.convert_to_tensor(self.image_as_nparray)
+        input_tensor = test_tensor[tf.newaxis, ...]
+        
+        #apply the model to run inference
+        detections = detection_function(input_tensor)
+        
+        #for each potential detection in the result we generate a detection object named i
+        for i, (box_limits, score, class_no) in enumerate(zip(detections["detection_boxes"], detections["detection_scores"], detections["detection_classes"])):
+            if score>cutoff:
+                detected_object = detection(box_array = box_limits, 
+                                            score = score, 
+                                            class_no = class_no, 
+                                            detection_number = i,                                           
+                                            parent_snippet = self
+                                            )
+                yield detected_object
+    
     def get_appropriate_bounds(self, x_min, y_min, snippet_size, image_xmax, image_ymax):
         """
         need to identify the bounds of the wider image to pull and then padd 
@@ -118,8 +279,6 @@ class image:
         #we will scan across the image left to right then down
         y = xy_inialisation
         while (y_max-y)>=output_size:
-            #if there is the full pixels needed 
-            #we initiate the counter in the x direction
             rows += 1
             x = xy_inialisation
             
@@ -135,8 +294,6 @@ class image:
                                             is_offset = is_offset
                                             )
                                     )
-                #add the cut piece of the image to the list
-                #self.snippets.append(self.image_as_nparray[y:y+output_size, x:x+output_size])
                 x += output_size
             else:
                 images += 1
@@ -150,24 +307,10 @@ class image:
                                             is_offset = is_offset
                                             )
                                     )
-                ##### Start of init function in snippet object ####
-                
-                #cut the crop image
-                #crop_img=self.image_as_nparray[y:y+output_size, x:x_max]
-                #create the border around the remaining part
-                #bordered_im = cv2.copyMakeBorder(crop_img, 0, output_size-crop_img.shape[0],\
-                #                             0 ,output_size-crop_img.shape[1], cv2.BORDER_CONSTANT)
-                
-                #### End of init function in snippet object ####
-                
-                #self.snippets.append(bordered_im)
                 x += output_size
             y += output_size
         else:
             rows += 1
-            #if we need to take a slice less than the 500 
-            #pixels in the y direction and add padding
-            #we initiate the counter in the x direction
             x = xy_inialisation
             
             while (x_max-x)>=output_size:
@@ -183,14 +326,6 @@ class image:
                                             )
                                     )
                 x += output_size
-                ##### Start of init function in snippet object ####
-                #cut the crop image
-                #crop_img=self.image_as_nparray[y:y_max, x:x+output_size]
-                #create the border around the remaining part
-                #bordered_im = cv2.copyMakeBorder(crop_img, 0, output_size-crop_img.shape[0],\
-                #                                 0,output_size-crop_img.shape[1], cv2.BORDER_CONSTANT)
-                #self.snippets.append(bordered_im)
-                #### End of init function in snippet object ####
             else:
                 images += 1
                 self.snippets.append(snippet(snippet_size = output_size, 
@@ -203,17 +338,6 @@ class image:
                                             is_offset = is_offset
                                             )
                                     )
-                ##### Start of init function in snippet object ####
-                
-                #cut the crop image
-                #crop_img=self.image_as_nparray[y:y_max, x:x_max]
-                #create the border around the remaining part
-                #bordered_im = cv2.copyMakeBorder(crop_img, 0, output_size-crop_img.shape[0],\
-                #                                 0,output_size-crop_img.shape[1], cv2.BORDER_CONSTANT)
-                
-                #### End of init function in snippet object ####
-                
-                #self.snippets.append(bordered_im)
                 x += output_size
             y += output_size
         return int(rows), int(images/rows)
@@ -246,7 +370,7 @@ class image:
                                                                     )
     def plot_image_snippets(self, fig_size):
         """
-        """#TODO: split into two or give option to choose which one to plot
+        """#TODO: split into two or give option to choose which lone to plot
         fig,axes = plt.subplots(nrows = self.rows, ncols = self.columns, figsize=(fig_size,fig_size))
         ##label as numbers for each image
         image_no=0
@@ -265,6 +389,77 @@ class image:
                 axes[i,j].axis('off')
                 image_no += 1
         plt.show()
+    
+    def detect_objects(self, detection_function, score_cuttoff):
+        """
+        Detects all objects in the snippets within this image
+        """
+        # set a detection_counter so that each detection can be referenced by its position in the image.detections list
+        i=0
+        for snippet in self.snippets:
+            for detection in snippet.return_detected_objects(detection_function = detection_function,
+                                                            score_cutoff = score_cuttoff,
+                                                            intersection_over_union_cutoff = intersection_over_union_cutoff
+                                                            ):
+                self.detetions.append(detection)
+                detection.set_id(i)
+                
 
 
-print("Classes compile? correctly")
+    def remove_overlapping_objects(self, num_quasi_radii, intersection_over_union_cutoff, preference_cars = True):
+        """
+        Identifies detection objects with overlapping bounding boxes and then Sets the active attribute 
+        of the detection(s) with lower score 
+        Preferences detectuibs which are inferred to be cars regardless of score by default
+        """
+        
+        #TODO: this is super messy, should be in sub functions, look into it.
+        
+        #we identify possible candidates to reduce the computational time
+        for detection in self.detections:
+            detection.identify_possible_overlaps(all_detections_in_image = intersection_over_union_cutoff, 
+                                                num_quasi_radii = num_quasi_radii
+                                                )
+        
+        #it is important that the process of setting active = False is undertaken from the objects
+        #with the highest scores first. However if I sort te objects it;s going to fuck up the system of refering
+        #the objects based on their position in the detection lists. So instad we get a list of the ids in order
+        # if there is a preference for cars this sorting needs to be first on the clas id (it's 1 for cars)
+        if preference_cars:
+            order_to_process_detections = [detection.id for detection in sorted(self.detections, key=attrgetter("class_no", "detection_score_sort"))]
+        else:
+            order_to_process_detections = [detection.id for detection in sorted(self.detections, key=attrgetter("class_no"))]
+        # then we perform the process of deactivating overlapping boxes
+        
+        for detection_id in order_to_process_detections:
+            #take the detection from the list of detections
+            detection = self.detections[detection_id]
+            #if it's active (i.e. those with higher scores haven't deactived it)
+            if detection.active:
+                #idenify possible overlaps
+                detection.identify_possible_overlaps(all_detections_in_image = self.detections, 
+                                                    num_quasi_radii = num_quasi_radii
+                                                    )
+                #identify overlaps based on the 
+                detection.identify_overlaps(all_detections_in_image = self.detections, 
+                                            intersection_over_union_cutoff = intersection_over_union_cutoff, 
+                                            )
+                
+                #set these detections to inactive
+                for overlapping_id in detection.overlapping_ids:
+                    self.detecions[overlapping_id].active = False
+    
+    def plot_active_detections_cv2(self, circle_radius_ratio, circle_brg_colour_tuple):
+        # plot the full image with small cicles over the active detection objects
+        self.copy_for_plotting = copy.deepcopy(self.image_as_nparray)
+        
+        #plot the circles
+        for detection in self.detections:
+            if detection.active:
+                cv2.circle(img = self.copy_for_plotting, 
+                            centre = (detection.centroidx, detection.centroidy),
+                            radius = detection.quasi_radius*circle_radius_ratio,
+                            color = circle_brg_colour_tuple
+                            )
+        plt.imshow(self.copy_for_plotting)
+print("Classes written correctly")
