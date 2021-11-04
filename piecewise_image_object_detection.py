@@ -5,6 +5,7 @@ import copy
 import os
 from operator import itemgetter, attrgetter
 from matplotlib.pyplot import subplots
+from statistics import median
 
 #TODO: capital letters for classes
 
@@ -447,7 +448,44 @@ class image:
                                                                     color = circle_brg_colour_tuple,
                                                                     thickness=-1)
         ax.imshow(self.copy_for_plotting, interpolation='nearest')
-        
+    
+    def save_plotted_detections(self, save_location, circle_radius_ratio, circle_brg_colour_tuple):
+        # plot the full image with small cicles over the active detection objects
+        self.copy_for_plotting = copy.deepcopy(self.image_as_nparray)
+        #plot the circles
+        for detection in self.detections:
+            if detection.active:
+                cv2.circle(img = self.copy_for_plotting, center = (int(detection.centroidx), 
+                                                                    int(detection.centroidy)), 
+                                                                    radius = int(detection.quasi_radius*circle_radius_ratio), 
+                                                                    color = circle_brg_colour_tuple,
+                                                                    thickness=-1)
+        cv2.imwrite(filename = save_location,
+                   img = self.copy_for_plotting
+                   )
+    
     def number_of_cars(self):
         return len([item for item in self.detections if item.active])
-print("Classes written correctly")
+    
+    def average_box_radius(self):
+        radii = []
+        for detection in self.detections:
+            if detection.active:
+                radii.append(detection.quasi_radius)
+        return sum(radii)/len(radii)
+    
+    def median_box_radius(self):
+        radii = []
+        for detection in self.detections:
+            if detection.active:
+                radii.append(detection.quasi_radius)
+        return median(radii)
+    
+    def median_box_radius_above_score_percentile(self, percentile):
+        radii = []
+        for detection in self.detections:
+            if detection.active:
+                radii.append(detection.quasi_radius)
+        return np.percentile(radii, percentile)
+        
+print("Classes imported successfully")
