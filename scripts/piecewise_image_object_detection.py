@@ -447,7 +447,7 @@ class image:
                                                                     radius = int(detection.quasi_radius*circle_radius_ratio), 
                                                                     color = circle_brg_colour_tuple,
                                                                     thickness=-1)
-        ax.imshow(self.copy_for_plotting, interpolation='nearest')
+        ax.imshow(cv2.cvtColor(self.copy_for_plotting, cv2.COLOR_BGR2RGB), interpolation='nearest')
     
     def save_plotted_detections(self, save_location, circle_radius_ratio, circle_brg_colour_tuple):
         # plot the full image with small cicles over the active detection objects
@@ -460,9 +460,7 @@ class image:
                                                                     radius = int(detection.quasi_radius*circle_radius_ratio), 
                                                                     color = circle_brg_colour_tuple,
                                                                     thickness=-1)
-        cv2.imwrite(filename = save_location,
-                   img = self.copy_for_plotting
-                   )
+        cv2.imwrite(filename = save_location, img = self.copy_for_plotting)
     
     def number_of_cars(self):
         return len([item for item in self.detections if item.active])
@@ -488,4 +486,4 @@ class image:
                 radii.append(detection.quasi_radius)
         return np.percentile(radii, percentile)
         
-print("Classes imported successfully")
+print("Classes written correctly")
